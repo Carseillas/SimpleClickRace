@@ -1,0 +1,27 @@
+{
+  "name": "simpleclickrace",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "concurrently \"npm run server\" \"npm run site\"",
+    "site": "cd site && npm start",
+    "server": "cd server && node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Carseillas/SimpleClickRace.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Carseillas/SimpleClickRace/issues"
+  },
+  "homepage": "https://github.com/Carseillas/SimpleClickRace#readme",
+  "dependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
