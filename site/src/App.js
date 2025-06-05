@@ -15,7 +15,7 @@ function App() {
     });
 
     socket.on("upload", () => {
-
+      
     });
 
     socket.on("full", () => {

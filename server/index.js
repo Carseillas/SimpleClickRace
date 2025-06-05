@@ -21,7 +21,7 @@ io.on("connection", (socket) => {
 
   if (devices.length < 2) {
     devices.push(socket.id);
-    socket.emit("joined", { id: socket.id, deviceNumber: devices.length });
+    io.emit("joined", { id: socket.id, deviceNumber: devices.length });
     io.emit("devices", devices);
   } else {
     socket.emit("full");
@@ -30,6 +30,11 @@ io.on("connection", (socket) => {
   socket.on("start", () => {
     if (!exchangeStarted && devices.length === 2) {
       exchangeStarted = true;
+      io.emit("start")
+      setTimeout(() => {
+        io.emit("end")
+        exchangeStarted = false;
+      }, 5000);
     }
   });
 
