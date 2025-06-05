@@ -14,56 +14,33 @@ const io = new Server(server, {
   },
 });
 
-let players = [];
-let clicks = {};
-let gameStarted = false;
+let devices = [];
 
 io.on("connection", (socket) => {
-  console.log("Yeni oyuncu:", socket.id);
+  console.log("New device connected:", socket.id);
 
-  if (players.length < 2) {
-    players.push(socket.id);
-    clicks[socket.id] = 0;
-    socket.emit("joined", { id: socket.id, playerNumber: players.length });
-    io.emit("players", players);
+  if (devices.length < 2) {
+    devices.push(socket.id);
+    socket.emit("joined", { id: socket.id, deviceNumber: devices.length });
+    io.emit("devices", devices);
   } else {
     socket.emit("full");
   }
 
   socket.on("start", () => {
-    if (!gameStarted && players.length === 2) {
-      gameStarted = true;
-      clicks[players[0]] = 0;
-      clicks[players[1]] = 0;
-      io.emit("start");
-      setTimeout(() => {
-        const score1 = clicks[players[0]];
-        const score2 = clicks[players[1]];
-        let result;
-        if (score1 > score2) result = "Oyuncu 1 kazandı!";
-        else if (score2 > score1) result = "Oyuncu 2 kazandı!";
-        else result = "Berabere!";
-        io.emit("end", { score1, score2, result });
-        gameStarted = false;
-      }, 5000);
-    }
-  });
-
-  socket.on("click", () => {
-    if (gameStarted && clicks[socket.id] !== undefined) {
-      clicks[socket.id]++;
+    if (!exchangeStarted && devices.length === 2) {
+      exchangeStarted = true;
     }
   });
 
   socket.on("disconnect", () => {
-    console.log("Oyuncu ayrıldı:", socket.id);
-    players = players.filter((id) => id !== socket.id);
-    delete clicks[socket.id];
-    io.emit("players", players);
-    gameStarted = false;
+    console.log("Device left:", socket.id);
+    devices = devices.filter((id) => id !== socket.id);
+    io.emit("devices", devices);
+    exchangeStarted = false;
   });
 });
 
 server.listen(5000, () => {
-  console.log("Sunucu 5000 portunda çalışıyor");
+  console.log("Server running on port 5000...");
 });

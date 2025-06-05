@@ -1,46 +1,47 @@
 import React, { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-const socket = io("http://192.168.1.37:5000");
+const socket = io("http://192.168.1.50:5000");
 
 function App() {
-  const [playerNumber, setPlayerNumber] = useState(null);
-  const [status, setStatus] = useState("Oyuncu bekleniyor...");
-  const [count, setCount] = useState(0);
-  const [gameActive, setGameActive] = useState(false);
+  const [deviceNumber, setdeviceNumber] = useState(null);
+  const [status, setStatus] = useState("Device waiting...");
+  const [exchangeActive, setExchangeActive] = useState(false);
 
   useEffect(() => {
-    socket.on("joined", ({ playerNumber }) => {
-      setPlayerNumber(playerNumber);
-      setStatus("Hazırsın, diğer oyuncuyu bekle...");
+    socket.on("joined", ({ deviceNumber }) => {
+      setdeviceNumber(deviceNumber);
+      setStatus("Ready, waiting another device...");
+    });
+
+    socket.on("upload", () => {
+
     });
 
     socket.on("full", () => {
-      setStatus("Oda dolu, bekle.");
+      setStatus("Someone exchanging");
     });
 
-    socket.on("players", (players) => {
-      if (players.length === 2) {
-        setStatus("Başlatmak için butona tıkla");
+    socket.on("devices", (devices) => {
+      if (devices.length === 2) {
+        setStatus("Click to start exchange");
       }
     });
 
     socket.on("start", () => {
-      setStatus("Oyun başladı! Tıkla! Tıkla! Tıkla!");
-      setCount(0);
-      setGameActive(true);
+      setStatus("Exchange Ready");
+      setExchangeActive(true);
     });
 
-    socket.on("end", ({ score1, score2, result }) => {
-      setGameActive(false);
-      setStatus(`${result} Skorlar: Oyuncu 1: ${score1}, Oyuncu 2: ${score2}`);
+    socket.on("end", () => {
+      setExchangeActive(false);
+      setStatus(`Exchange Finished`);
     });
   }, []);
 
   const handleClick = () => {
-    if (gameActive) {
-      setCount((prev) => prev + 1);
-      socket.emit("click");
+    if (exchangeActive) {
+      socket.emit("upload");
     }
   };
 
@@ -50,8 +51,8 @@ function App() {
 
   return (
     <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h1>Tıklama Savaşı</h1>
-      <p>Sen Oyuncu: {playerNumber || "?"}</p>
+      <h1>File Exchange By LAN</h1>
+      <p>Device no: {deviceNumber || "?"}</p>
       <div 
         style={{
           width: '40%',
@@ -63,19 +64,19 @@ function App() {
         }}
       >
         <p>{status}</p>
-        {playerNumber && (
+        {deviceNumber && (
           <>
-            <button onClick={handleStart} disabled={gameActive}>
-              Oyunu Başlat
+            <button onClick={handleStart} disabled={exchangeActive}>
+              Start Exchange
             </button>
             <br />
             <br />
-            <button className = "tıkla"
+            <button className = "filebutton"
               onClick={handleClick}
-              disabled={!gameActive}
+              disabled={!exchangeActive}
               style={{ padding: "20px", fontSize: "24px" }}
             >
-              Tıkla ({count})
+              Select File
             </button>
           </>
         )}
