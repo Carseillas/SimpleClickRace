@@ -11,11 +11,16 @@ function App() {
   const [files, setFiles] = useState(null);
   const [progress, setProgress] = useState( {started: false, pc: 0} );
   const [msg, setMsg] = useState(null);
+  const [fileList, setFileList] = useState([]);
 
   useEffect(() => {
     socket.on("joined", ({ deviceNumber }) => {
       setdeviceNumber(deviceNumber);
       setStatus("Ready, waiting another device...");
+    });
+
+    socket.on("files", (files) => {
+      setFileList(files);
     });
 
     socket.on("upload", () => {
@@ -41,6 +46,11 @@ function App() {
       setExchangeActive(false);
       setStatus(`Exchange Finished`);
     });
+
+    // Temizlik için
+    return () => {
+      socket.off("files");
+    };
   }, []);
 
   function handleUpload() {
@@ -53,19 +63,20 @@ function App() {
         socket.emit("upload");
         const fd = new FormData();
         for (let i=0; i<files.length; i++) {
-          fd.append('file ${i+1}', files[i]);
+          fd.append('files', files[i]);
         }
 
         setMsg("Uploading...");
         setProgress(prevState => {
           return{...prevState, started: true}
         })
-        axios.post('http://httpbin.org/post', fd, {
+        axios.post('http://192.168.1.86:5000/upload', fd, {
           onUploadProgress:(progressEvent) => {setProgress(prevState => {
             return {...prevState, pc: progressEvent.progress*100}
           }) },
           headers: {
             "Custom-Header": "value",
+            "socket-id": socket.id,
           }
         })
         .then(res => {
@@ -138,6 +149,14 @@ function App() {
         }}
       >
         <h1>Uploadings</h1>
+        {fileList.length === 0 && <p>No files yet</p>}
+        <ul>
+          {fileList.map((file, idx) => (
+            <li key={idx}>
+              <a href={`http://192.168.1.86:5000/uploads/${file}`} download>{file}</a>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
