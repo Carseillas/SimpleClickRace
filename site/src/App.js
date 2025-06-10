@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import axios from "axios";
 
-const socket = io("http://192.168.1.50:5000");
+const socket = io("http://192.168.1.86:5000");
 
 function App() {
   const [deviceNumber, setdeviceNumber] = useState(null);
   const [status, setStatus] = useState("Device waiting...");
   const [exchangeActive, setExchangeActive] = useState(false);
+  const [files, setFiles] = useState(null);
+  const [progress, setProgress] = useState( {started: false, pc: 0} );
+  const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     socket.on("joined", ({ deviceNumber }) => {
@@ -15,7 +19,7 @@ function App() {
     });
 
     socket.on("upload", () => {
-      
+
     });
 
     socket.on("full", () => {
@@ -39,9 +43,41 @@ function App() {
     });
   }, []);
 
-  const handleClick = () => {
+  function handleUpload() {
     if (exchangeActive) {
-      socket.emit("upload");
+      if (!files) {
+      setMsg("No file selected");
+      return;
+      }
+      else {
+        socket.emit("upload");
+        const fd = new FormData();
+        for (let i=0; i<files.length; i++) {
+          fd.append('file ${i+1}', files[i]);
+        }
+
+        setMsg("Uploading...");
+        setProgress(prevState => {
+          return{...prevState, started: true}
+        })
+        axios.post('http://httpbin.org/post', fd, {
+          onUploadProgress:(progressEvent) => {setProgress(prevState => {
+            return {...prevState, pc: progressEvent.progress*100}
+          }) },
+          headers: {
+            "Custom-Header": "value",
+          }
+        })
+        .then(res => {
+          setMsg("Upload Successful")
+          console.log(res.data)
+          socket.emit("end")
+        })
+        .catch(err => {
+          setMsg("Upload Failed")
+          console.error(err)
+        });
+      }
     }
   };
 
@@ -66,20 +102,42 @@ function App() {
         <p>{status}</p>
         {deviceNumber && (
           <>
+
             <button onClick={handleStart} disabled={exchangeActive}>
               Start Exchange
             </button>
+
             <br />
             <br />
-            <button className = "filebutton"
-              onClick={handleClick}
+
+            <input onChange = { (e) => {setFiles(e.target.files)}} type="file" multiple/>
+            
+            <button
+              onClick={handleUpload}
               disabled={!exchangeActive}
               style={{ padding: "20px", fontSize: "24px" }}
             >
-              Select File
+              Upload
             </button>
+
+            {progress.started && <progress max="100" value={progress.pc}></progress>}
+
+            {msg && <span>{msg}</span>}
+
           </>
         )}
+      </div>
+      <div 
+        style={{
+          width: '40%',
+          margin: '0 auto',
+          padding: '20px',
+          backgroundColor: '#f0f0f0',
+          border: '5px solid #ccc',
+          borderRadius: '8px'
+        }}
+      >
+        <h1>Uploadings</h1>
       </div>
     </div>
   );

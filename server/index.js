@@ -15,6 +15,7 @@ const io = new Server(server, {
 });
 
 let devices = [];
+exchangeStarted = false;
 
 io.on("connection", (socket) => {
   console.log("New device connected:", socket.id);
@@ -31,11 +32,15 @@ io.on("connection", (socket) => {
     if (!exchangeStarted && devices.length === 2) {
       exchangeStarted = true;
       io.emit("start")
-      setTimeout(() => {
-        io.emit("end")
-        exchangeStarted = false;
-      }, 5000);
+      socket.on("upload", () => {
+        io.emit("upload")
+      });
     }
+  });
+
+  socket.on("end", () => {
+    io.emit("end")
+    exchangeStarted = false;
   });
 
   socket.on("disconnect", () => {
