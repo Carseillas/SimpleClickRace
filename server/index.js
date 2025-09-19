@@ -9,7 +9,11 @@ const { Server } = require("socket.io");
 const app = express();
 app.use(cors());
 
-const upload = multer({ dest: 'uploads/' });
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => cb(null, file.originalname),
+});
+const upload = multer({ storage });
 
 const uploadedFiles = {};
 
@@ -30,7 +34,7 @@ function getUploadedFiles() {
 
 app.post("/upload", upload.array("files"), (req, res) => {
   const socketId = req.headers["socket-id"]; // React’ten gönderilecek
-  const fileNames = req.files.map((file) => file.filename);
+  const fileNames = req.files.map((file) => file.originalname);
 
   // Bu socket ID'ye ait yüklenen dosyaları kaydet
   if (!uploadedFiles[socketId]) {
