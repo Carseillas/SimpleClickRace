@@ -73,7 +73,7 @@ function App() {
 
   return (
     <div style={{ textAlign: "center", marginTop: "50px" }}>
-      <h1>File Exchange By LAN</h1>
+      <h1>File Exchange Via LAN</h1>
       <p>Device no: {deviceNumber || "?"}</p>
       <p>Status: {status}</p>
 
