@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "concurrently \"npm run server\" \"npm run site\"",
-    "site": "cd site && npm start",
+    "site": "cd site && npm start --host 0.0.0.0",
     "server": "cd server && node index.js"
   },
   "repository": {

@@ -7,60 +7,75 @@ const path = require("path");
 const { Server } = require("socket.io");
 
 const app = express();
-app.use(cors());
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, file.originalname),
-});
-const upload = multer({ storage });
-
-const uploadedFiles = {};
-
 const server = http.createServer(app);
+
+// 🔐 CORS - allow your frontend
+app.use(cors({
+  origin: ["http://localhost:3000", "http://192.168.1.58:3000"],
+  credentials: true,
+}));
+
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: ["http://localhost:3000", "http://192.168.1.58:3000"],
     methods: ["GET", "POST"],
-  },
+  }
 });
 
+const UPLOAD_DIR = path.join(__dirname, "uploads");
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
+
+// ✅ Multer storage & filter
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+    cb(null, safeName);
+  }
+});
+
+const allowedExtensions = ['.jpg', '.png', '.pdf', '.docx', '.zip', '.txt'];
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!allowedExtensions.includes(ext)) return cb(new Error("File type not allowed"));
+    cb(null, true);
+  },
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
+
+// 🔁 Helper to list files
+const getUploadedFiles = () => fs.readdirSync(UPLOAD_DIR);
+
+const userUploads = {};
 let devices = [];
 let exchangeStarted = false;
 
-function getUploadedFiles() {
-  return fs.readdirSync(path.join(__dirname, "uploads"));
-}
-
+// ✅ Upload endpoint
 app.post("/upload", upload.array("files"), (req, res) => {
-  const socketId = req.headers["socket-id"]; // React’ten gönderilecek
-  const fileNames = req.files.map((file) => file.originalname);
+  const userId = req.headers["socket-id"] || "guest";
 
-  // Bu socket ID'ye ait yüklenen dosyaları kaydet
-  if (!uploadedFiles[socketId]) {
-    uploadedFiles[socketId] = [];
-  }
-  uploadedFiles[socketId].push(...fileNames);
+  const uploaded = req.files.map(f => f.filename);
+  if (!userUploads[userId]) userUploads[userId] = [];
+  userUploads[userId].push(...uploaded);
 
-  // Listeyi herkese gönder
-  fs.readdir(path.join(__dirname, "uploads"), (err, files) => {
-    if (err) return res.status(500).send("Server error");
-    io.emit("files", files);
-    res.send({ message: "Files uploaded", files });
-  });
+  io.emit("files", getUploadedFiles());
+
+  res.status(200).json({ message: "Upload successful", files: uploaded });
 });
 
-// Statik dosyaları sun (indirilebilir dosyalar)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// ✅ Serve uploaded files
+app.use("/uploads", express.static(UPLOAD_DIR));
 
+// 🔐 Socket.IO
 io.on("connection", (socket) => {
-  console.log("New device connected:", socket.id);
+  console.log("Device connected:", socket.id);
 
   if (devices.length < 2) {
     devices.push(socket.id);
-    io.emit("joined", { id: socket.id, deviceNumber: devices.length });
+    socket.emit("joined", { deviceNumber: devices.length });
     io.emit("devices", devices);
-    // Yeni bağlanan client'a mevcut dosya listesini gönder
     socket.emit("files", getUploadedFiles());
   } else {
     socket.emit("full");
@@ -70,40 +85,35 @@ io.on("connection", (socket) => {
   socket.on("start", () => {
     if (!exchangeStarted && devices.length === 2) {
       exchangeStarted = true;
-      io.emit("start")
+      io.emit("start");
     }
   });
 
-  socket.on("upload", () => {
-    io.emit("upload")
-  });
+  socket.on("upload", () => io.emit("upload"));
 
   socket.on("end", () => {
-    io.emit("end")
+    io.emit("end");
     exchangeStarted = false;
   });
 
   socket.on("disconnect", () => {
     console.log("Device left:", socket.id);
-    const filesToDelete = uploadedFiles[socket.id] || [];
-    filesToDelete.forEach((filename) => {
-      const filePath = path.join(__dirname, "uploads", filename);
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Dosya silinemedi:", filename, err);
-        else console.log("Silindi:", filename);
+    const filesToDelete = userUploads[socket.id] || [];
+    filesToDelete.forEach(filename => {
+      const filePath = path.join(UPLOAD_DIR, filename);
+      fs.unlink(filePath, err => {
+        if (err) console.error("Couldn't delete:", filename, err);
       });
     });
-    fs.readdir(path.join(__dirname, "uploads"), (err, files) => {
-      if (!err) io.emit("files", files);
-    });
-    devices = devices.filter((id) => id !== socket.id);
+    delete userUploads[socket.id];
+
+    devices = devices.filter(id => id !== socket.id);
     io.emit("devices", devices);
-    // Temizle
-    delete uploadedFiles[socket.id];
+    io.emit("files", getUploadedFiles());
     exchangeStarted = false;
   });
 });
 
 server.listen(5000, () => {
-  console.log("Server running on port 5000...");
+  console.log("🚀 File Exchange Server running on http://localhost:5000");
 });
