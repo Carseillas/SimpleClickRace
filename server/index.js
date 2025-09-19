@@ -10,8 +10,9 @@ const app = express();
 const server = http.createServer(app);
 
 // 🔐 CORS - allow localhost + LAN frontend
+const FRONTEND_URLS = ["http://localhost:3000", "http://192.168.1.58:3000"]; // add your LAN IP
 app.use(cors({
-  origin: true,
+  origin: FRONTEND_URLS,
   credentials: true,
 }));
 
