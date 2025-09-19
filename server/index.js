@@ -1,4 +1,3 @@
-require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const cors = require("cors");
@@ -6,32 +5,34 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const { Server } = require("socket.io");
-const os = require("os");
 
 const app = express();
 const server = http.createServer(app);
 
-// 🔐 CORS - allow any LAN device
+// 🔐 CORS - allow localhost + LAN frontend
 app.use(cors({
-  origin: true, // allow all origins
+  origin: true,
   credentials: true,
 }));
 
-// 🌐 Socket.IO
 const io = new Server(server, {
-  cors: { origin: true, methods: ["GET", "POST"] },
+  cors: {
+    origin: FRONTEND_URLS,
+    methods: ["GET", "POST"],
+  }
 });
 
+// Upload folder
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
-// ✅ Multer storage & safe filenames
+// Multer storage & filter
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     cb(null, safeName);
-  },
+  }
 });
 
 const allowedExtensions = ['.jpg', '.png', '.pdf', '.docx', '.zip', '.txt', '.exe'];
@@ -42,38 +43,38 @@ const upload = multer({
     if (!allowedExtensions.includes(ext)) return cb(new Error("File type not allowed"));
     cb(null, true);
   },
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
 });
 
-// ✅ Upload endpoint
-const userUploads = {};
+// Helper to list files
+const getUploadedFiles = () => fs.readdirSync(UPLOAD_DIR);
+
+let userUploads = {};
+let devices = [];
+let exchangeStarted = false;
+
+// Upload endpoint
 app.post("/upload", upload.array("files"), (req, res) => {
-  const userId = req.headers["socket-id"];
-  if (!userUploads[userId]) userUploads[userId] = [];
+  const userId = req.headers["socket-id"] || "guest";
   const uploaded = req.files.map(f => f.filename);
+
+  if (!userUploads[userId]) userUploads[userId] = [];
   userUploads[userId].push(...uploaded);
 
   io.emit("files", getUploadedFiles());
   res.status(200).json({ message: "Upload successful", files: uploaded });
 });
 
-// ✅ Serve uploads
+// Serve uploaded files
 app.use("/uploads", express.static(UPLOAD_DIR));
 
-// 🔁 Helper
-const getUploadedFiles = () => fs.readdirSync(UPLOAD_DIR);
-
-let devices = [];
-let exchangeStarted = false;
-
-// ✅ Socket.IO
+// Socket.IO
 io.on("connection", (socket) => {
-  const userId = socket.id;
-  console.log("New device connected:", userId);
+  console.log("Device connected:", socket.id);
 
   if (devices.length < 2) {
-    devices.push(userId);
-    io.emit("joined", { deviceNumber: devices.length });
+    devices.push(socket.id);
+    socket.emit("joined", { deviceNumber: devices.length });
     io.emit("devices", devices);
     socket.emit("files", getUploadedFiles());
   } else {
@@ -96,38 +97,26 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log("Device left:", userId);
+    console.log("Device left:", socket.id);
 
-    const filesToDelete = userUploads[userId] || [];
+    // Delete files uploaded by this device
+    const filesToDelete = userUploads[socket.id] || [];
     filesToDelete.forEach(filename => {
       const filePath = path.join(UPLOAD_DIR, filename);
-      fs.unlink(filePath, (err) => {
+      fs.unlink(filePath, err => {
         if (err) console.error("Couldn't delete:", filename, err);
         else console.log("Deleted:", filename);
       });
     });
 
-    delete userUploads[userId];
-    devices = devices.filter(id => id !== userId);
+    delete userUploads[socket.id];
+    devices = devices.filter(id => id !== socket.id);
     io.emit("devices", devices);
     io.emit("files", getUploadedFiles());
     exchangeStarted = false;
   });
 });
 
-// 🔹 Dynamic LAN IP
-function getLocalIP() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) return iface.address;
-    }
-  }
-  return 'localhost';
-}
-
-const PORT = 5000;
-server.listen(PORT, () => {
-  const ip = getLocalIP();
-  console.log(`🚀 File Exchange Server running on http://${ip}:${PORT}`);
+server.listen(5000, () => {
+  console.log("🚀 File Exchange Server running on http://192.168.1.58:5000");
 });
